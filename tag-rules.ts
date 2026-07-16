@@ -22,16 +22,29 @@ export function patternToRegex(pattern: string, caseSensitive: boolean): RegExp 
 	return new RegExp(`^${source}$`, caseSensitive ? "" : "i");
 }
 
-export function matchingTags(path: string, rules: TagRule[], caseSensitive: boolean): Set<string> {
-	const tags = new Set<string>();
+export interface RuleMatch {
+	rule: TagRule;
+	tags: string[];
+}
+
+// Like matchingTags, but reports which rule(s) contributed which tags, for debug logging.
+export function matchingRules(path: string, rules: TagRule[], caseSensitive: boolean): RuleMatch[] {
+	const matches: RuleMatch[] = [];
 	for (const rule of rules) {
 		if (!rule.pattern.trim()) continue;
 		const regex = patternToRegex(rule.pattern, caseSensitive);
 		if (regex.test(path)) {
-			for (const tag of rule.tags) {
-				if (tag.trim()) tags.add(tag.trim());
-			}
+			const tags = rule.tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0);
+			matches.push({ rule, tags });
 		}
+	}
+	return matches;
+}
+
+export function matchingTags(path: string, rules: TagRule[], caseSensitive: boolean): Set<string> {
+	const tags = new Set<string>();
+	for (const { tags: ruleTags } of matchingRules(path, rules, caseSensitive)) {
+		for (const tag of ruleTags) tags.add(tag);
 	}
 	return tags;
 }

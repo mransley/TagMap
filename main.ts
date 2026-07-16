@@ -8,7 +8,7 @@ import {
 	TFile,
 	TFolder,
 } from "obsidian";
-import { TagRule, matchingTags, normalizeExistingTags } from "./tag-rules";
+import { matchingRules, normalizeExistingTags, TagRule } from "./tag-rules";
 
 interface TagMapSettings {
 	rules: TagRule[];
@@ -16,6 +16,7 @@ interface TagMapSettings {
 	tagOnMove: boolean;
 	removeTagsOnMove: boolean;
 	caseSensitive: boolean;
+	debugLogging: boolean;
 }
 
 const DEFAULT_SETTINGS: TagMapSettings = {
@@ -24,7 +25,13 @@ const DEFAULT_SETTINGS: TagMapSettings = {
 	tagOnMove: true,
 	removeTagsOnMove: false,
 	caseSensitive: false,
+	debugLogging: false,
 };
+
+function describeMatches(matches: { rule: TagRule; tags: string[] }[]): string {
+	if (matches.length === 0) return "no rules matched";
+	return matches.map(({ rule, tags }) => `"${rule.pattern}" -> [${tags.join(", ")}]`).join("; ");
+}
 
 export default class TagMapPlugin extends Plugin {
 	settings: TagMapSettings;
@@ -71,13 +78,29 @@ export default class TagMapPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	private log(message: string): void {
+		if (this.settings.debugLogging) {
+			console.log(`[TagMap] ${message}`);
+		}
+	}
+
 	async tagFile(file: TFile, additionalTags?: Set<string>) {
-		const tags = matchingTags(file.path, this.settings.rules, this.settings.caseSensitive);
+		const matches = matchingRules(file.path, this.settings.rules, this.settings.caseSensitive);
+		this.log(`"${file.path}": ${describeMatches(matches)}`);
+
+		const tags = new Set<string>();
+		for (const { tags: ruleTags } of matches) {
+			for (const tag of ruleTags) tags.add(tag);
+		}
 		if (additionalTags) {
 			for (const tag of additionalTags) tags.add(tag);
 		}
-		if (tags.size === 0) return;
+		if (tags.size === 0) {
+			this.log(`"${file.path}": no tags to apply, skipping`);
+			return;
+		}
 
+		this.log(`"${file.path}": applying tags [${Array.from(tags).join(", ")}]`);
 		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
 			const existing = normalizeExistingTags(frontmatter.tags);
 			const merged = new Set(existing);
@@ -87,15 +110,31 @@ export default class TagMapPlugin extends Plugin {
 	}
 
 	async handleRename(file: TFile, oldPath: string) {
-		const newTags = matchingTags(file.path, this.settings.rules, this.settings.caseSensitive);
+		this.log(`rename detected: "${oldPath}" -> "${file.path}"`);
+
+		const newMatches = matchingRules(file.path, this.settings.rules, this.settings.caseSensitive);
+		const newTags = new Set<string>();
+		for (const { tags } of newMatches) {
+			for (const tag of tags) newTags.add(tag);
+		}
 
 		if (!this.settings.removeTagsOnMove) {
 			await this.tagFile(file, newTags);
 			return;
 		}
 
-		const oldTags = matchingTags(oldPath, this.settings.rules, this.settings.caseSensitive);
+		const oldMatches = matchingRules(oldPath, this.settings.rules, this.settings.caseSensitive);
+		const oldTags = new Set<string>();
+		for (const { tags } of oldMatches) {
+			for (const tag of tags) oldTags.add(tag);
+		}
 		const staleTags = new Set([...oldTags].filter((tag) => !newTags.has(tag)));
+
+		this.log(`"${file.path}": old path ${describeMatches(oldMatches)}`);
+		this.log(`"${file.path}": new path ${describeMatches(newMatches)}`);
+		if (staleTags.size > 0) {
+			this.log(`"${file.path}": removing stale tags [${Array.from(staleTags).join(", ")}]`);
+		}
 
 		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
 			const existing = normalizeExistingTags(frontmatter.tags);
@@ -112,14 +151,17 @@ export default class TagMapPlugin extends Plugin {
 			.getMarkdownFiles()
 			.filter((file) => folder.path === "/" || file.path === prefix.slice(0, -1) || file.path.startsWith(prefix));
 
+		this.log(`applying tags to folder "${folder.path || "/"}" (${files.length} note(s) to scan)`);
+
 		let tagged = 0;
 		for (const file of files) {
-			const tags = matchingTags(file.path, this.settings.rules, this.settings.caseSensitive);
-			if (tags.size === 0) continue;
+			const matches = matchingRules(file.path, this.settings.rules, this.settings.caseSensitive);
+			if (matches.every(({ tags }) => tags.length === 0)) continue;
 			await this.tagFile(file);
 			tagged++;
 		}
 
+		this.log(`applied tags to ${tagged} of ${files.length} note(s) in "${folder.path || "/"}"`);
 		new Notice(`TagMap: applied tags to ${tagged} of ${files.length} note(s) in "${folder.path || "/"}"`);
 	}
 }
@@ -195,6 +237,18 @@ class TagMapSettingTab extends PluginSettingTab {
 			.addToggle((toggle) =>
 				toggle.setValue(this.plugin.settings.caseSensitive).onChange(async (value) => {
 					this.plugin.settings.caseSensitive = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName("Debug logging")
+			.setDesc(
+				"Log tagging decisions (which rules matched, which tags were applied or removed) to the developer console"
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.debugLogging).onChange(async (value) => {
+					this.plugin.settings.debugLogging = value;
 					await this.plugin.saveSettings();
 				})
 			);
