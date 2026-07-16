@@ -1,0 +1,10 @@
+{
+	"id": "tagmap",
+	"name": "TagMap",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Automatically tag notes based on which folder they live in, using glob-style folder-to-tag rules.",
+	"author": "TagMap contributors",
+	"authorUrl": "",
+	"isDesktopOnly": false
+}

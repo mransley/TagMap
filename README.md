@@ -90,6 +90,11 @@ If a note has no frontmatter yet, TagMap creates it. If frontmatter already exis
 | **Tag on move/rename** | Re-evaluate and update tags when a note changes folder | On |
 | **Remove tags on move** | Strip tags from the old folder's rule(s) if a note is moved out of a matching path | Off |
 | **Case-sensitive matching** | Match folder paths case-sensitively | Off |
+| **Debug logging** | Log tagging decisions (matched rules, applied/removed tags) to the developer console | Off |
+
+## Debugging
+
+Enable **Debug logging** under **Settings → TagMap**, then open the developer console (`Ctrl/Cmd+Shift+I`) to see which rules matched a note and which tags were applied or removed for every create, rename/move, or bulk-apply operation. Logs are prefixed with `[TagMap]`.
 
 ## FAQ
 
@@ -108,4 +113,4 @@ Issues and pull requests are welcome. Please open an issue describing the bug or
 
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -1,0 +1,13 @@
+.tagmap-rule {
+	flex-wrap: wrap;
+}
+
+.tagmap-rule .setting-item-control {
+	flex-grow: 1;
+	gap: var(--size-2-2);
+}
+
+.tagmap-rule .setting-item-control input[type="text"] {
+	flex: 1;
+	min-width: 8rem;
+}
